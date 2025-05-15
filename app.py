@@ -9,14 +9,20 @@ import os
 # Import custom modules
 from utils.data_loader import get_forex_data, get_available_pairs
 from utils.technical_indicators import add_all_indicators
-from utils.preprocessing import prepare_data_for_training, feature_selection
+from utils.preprocessing import prepare_data_for_training, prepare_sequence_data, feature_selection
 from utils.visualization import plot_candlestick_with_indicators, plot_model_performance, plot_feature_importance
 from utils.news_api import get_news_sentiment_for_pair
 from utils.economic_calendar import get_economic_calendar
 from models.machine_learning import train_evaluate_ml_models
-# Temporarily disable deep learning module due to compatibility issues
-# from models.deep_learning import train_evaluate_lstm
+# Import deep learning module
+from models.deep_learning import train_evaluate_lstm, create_lstm_model, save_model, load_model
 from backtest.strategy import run_backtest
+# Import telegram notification module
+from utils.telegram_notification import (
+    send_message, send_price_alert, send_ml_prediction, 
+    send_trading_signal, send_lstm_prediction, is_telegram_configured
+)
+from config import ENABLE_LSTM, ENABLE_TELEGRAM
 
 # Configure logging
 logging.basicConfig(
@@ -125,9 +131,38 @@ st.sidebar.header("Model Selection")
 use_random_forest = st.sidebar.checkbox("Random Forest", value=True)
 use_xgboost = st.sidebar.checkbox("XGBoost", value=True)
 use_gradient_boosting = st.sidebar.checkbox("Gradient Boosting", value=False)
-# Disable LSTM with explanation
-use_lstm = st.sidebar.checkbox("LSTM (Deep Learning)", value=False, disabled=True, 
-                             help="Temporarily disabled due to compatibility issues with TensorFlow and NumPy")
+# LSTM (deep learning) option
+use_lstm = st.sidebar.checkbox("LSTM (Deep Learning)", value=ENABLE_LSTM, 
+                            help="Use Long Short-Term Memory neural networks for predictions")
+
+# LSTM parameters if enabled
+if use_lstm:
+    st.sidebar.subheader("LSTM Parameters")
+    lstm_units = st.sidebar.slider("LSTM Units", 16, 128, 64, step=16)
+    lstm_dropout = st.sidebar.slider("Dropout Rate", 0.1, 0.5, 0.2, step=0.1)
+    lstm_epochs = st.sidebar.slider("Training Epochs", 10, 100, 50, step=10)
+    sequence_length = st.sidebar.slider("Sequence Length", 5, 30, 10, step=1)
+    
+# Telegram notification options
+if ENABLE_TELEGRAM:
+    st.sidebar.header("Telegram Notifications")
+    use_telegram = st.sidebar.checkbox("Enable Telegram Notifications", value=True,
+                                    help="Send trading signals and alerts to Telegram")
+    
+    # Notification types
+    if use_telegram:
+        notification_types = st.sidebar.multiselect(
+            "Notification Types",
+            ["LSTM Predictions", "ML Predictions", "Trading Signals", "Price Alerts"],
+            default=["LSTM Predictions", "Trading Signals"]
+        )
+        
+        # Telegram status indicator
+        telegram_configured = is_telegram_configured()
+        if telegram_configured:
+            st.sidebar.success("✅ Telegram bot configured")
+        else:
+            st.sidebar.warning("⚠️ Telegram bot not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in environment variables.")
 
 # Add a note about data requirements for ML models
 st.sidebar.info("Note: Machine learning models require sufficient historical data. For daily data, select a period of at least '1mo' or longer.")

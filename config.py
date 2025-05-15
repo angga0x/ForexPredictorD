@@ -2,6 +2,7 @@
 Configuration file for Forex Analysis and Prediction System.
 This file contains default parameters for the application.
 """
+import os
 
 # Data parameters
 DEFAULT_FOREX_PAIRS = [
@@ -37,6 +38,13 @@ DEFAULT_LSTM_UNITS = 64
 DEFAULT_LSTM_DROPOUT = 0.2
 DEFAULT_LSTM_EPOCHS = 50
 DEFAULT_LSTM_BATCH_SIZE = 32
+ENABLE_LSTM = True  # Flag to enable/disable LSTM functionality
+
+# Telegram notification parameters
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+ENABLE_TELEGRAM = True  # Flag to enable/disable Telegram notifications
+DEFAULT_NOTIFICATION_TYPES = ["LSTM Predictions", "Trading Signals", "Price Alerts"]
 
 # Backtesting parameters
 DEFAULT_INITIAL_CAPITAL = 10000
@@ -50,8 +58,8 @@ DEFAULT_CANDLESTICK_COLORS = {
 }
 
 # API keys (should be loaded from environment variables in production)
-TWELVE_DATA_API_KEY = "745c7fd1c34942dab4639a398bef1a81"  # os.getenv("TWELVE_DATA_API_KEY", "")
-NEWS_API_KEY = "3c4b6e6dffa0457b9c29727da56f9464"  # os.getenv("NEWS_API_KEY", "")
+TWELVE_DATA_API_KEY = os.getenv("TWELVE_DATA_API_KEY", "745c7fd1c34942dab4639a398bef1a81")
+NEWS_API_KEY = os.getenv("NEWS_API_KEY", "3c4b6e6dffa0457b9c29727da56f9464")
 
 # Logging parameters
 LOG_LEVEL = "INFO"
