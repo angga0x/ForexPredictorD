@@ -260,6 +260,10 @@ try:
                         if not df.empty:
                             with st.expander("View raw calendar content"):
                                 st.text(df.iloc[0]['raw_content'][:2000] + "...")
+                    elif source == 'sample_data':
+                        # Handle sample data mode
+                        st.subheader(f"Economic Calendar (Generated Sample)")
+                        st.info("📊 This is generated sample data based on common economic events. External data sources are currently unavailable.")
                     else:
                         # Handle structured calendar data
                         st.subheader(f"Economic Events from {source.capitalize()}")
