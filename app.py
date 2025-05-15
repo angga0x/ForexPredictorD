@@ -811,15 +811,20 @@ try:
         confidence = 0.5
         model_used = "ML"
         
-        # Check if we have ML predictions
+        # Check if we have ML predictions - using more sensitive thresholds
         if 'ml_prediction_data' in locals() and ml_prediction_data is not None and 'prediction' in ml_prediction_data:
             pred_value = ml_prediction_data['prediction']
-            if pred_value > 0.55:
+            # More sensitive thresholds (0.52/0.48 instead of 0.55/0.45)
+            if pred_value > 0.52:
                 prediction_direction = "UP"
-                confidence = pred_value
-            elif pred_value < 0.45:
+                confidence = pred_value 
+                # Scale confidence to make it more definitive for display
+                confidence = min(0.5 + (pred_value - 0.5) * 1.5, 0.95)
+            elif pred_value < 0.48:
                 prediction_direction = "DOWN"
                 confidence = 1 - pred_value
+                # Scale confidence to make it more definitive for display
+                confidence = min(0.5 + (0.5 - pred_value) * 1.5, 0.95)
             model_used = ml_prediction_data.get('model_name', 'ML Model')
         
         # Check if we have LSTM predictions (override ML if available)
@@ -839,13 +844,16 @@ try:
         if 'backtest_results' in locals() and backtest_results is not None:
             if 'signals' in backtest_results and len(backtest_results['signals']) > 0:
                 last_signal = backtest_results['signals'].iloc[-1]
-                if abs(last_signal) > 0.7:  # Only override if strong signal
+                # Lower threshold from 0.7 to 0.5 to be more sensitive to signals
+                if abs(last_signal) > 0.5:  # More sensitive threshold
                     if last_signal > 0:
                         prediction_direction = "UP"
-                        confidence = min(abs(last_signal), 0.95)  # Cap at 0.95
+                        # Scale confidence to make it more definitive
+                        confidence = min(0.55 + abs(last_signal) * 0.45, 0.95)  # Cap at 0.95
                     elif last_signal < 0:
                         prediction_direction = "DOWN"
-                        confidence = min(abs(last_signal), 0.95)  # Cap at 0.95
+                        # Scale confidence to make it more definitive
+                        confidence = min(0.55 + abs(last_signal) * 0.45, 0.95)  # Cap at 0.95
                     model_used = strategy_type
         
         # Get ATR value if available for target calculation
