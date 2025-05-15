@@ -9,7 +9,7 @@ import logging
 from twelvedata import TDClient
 from datetime import datetime, timedelta
 import time
-from config import TWELVE_DATA_API_KEY
+from config import TWELVEDATA_API_KEY
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ def initialize_client():
         TDClient: TwelveData API client
     """
     try:
-        return TDClient(apikey=TWELVE_DATA_API_KEY)
+        return TDClient(apikey=TWELVEDATA_API_KEY)
     except Exception as e:
         logger.error(f"Error initializing TwelveData client: {str(e)}")
         return None
