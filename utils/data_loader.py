@@ -3,9 +3,18 @@ import numpy as np
 import yfinance as yf
 import logging
 from datetime import datetime, timedelta
+import os
+from utils.twelvedata_api import (
+    get_forex_data_twelvedata, get_available_forex_pairs,
+    map_yfinance_to_twelvedata_symbol, map_yfinance_to_twelvedata_interval
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Set data source preference
+# Options: 'yfinance', 'twelvedata', 'both' (tries twelvedata first, then yfinance as fallback)
+DATA_SOURCE_PREFERENCE = 'both'
 
 def get_available_pairs():
     """

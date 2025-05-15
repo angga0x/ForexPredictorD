@@ -10,6 +10,7 @@ dependencies = [
     "scikit-learn>=1.6.1",
     "streamlit>=1.45.1",
     "tensorflow>=2.14.0",
+    "twelvedata>=1.2.25",
     "xgboost>=3.0.1",
     "yfinance>=0.2.61",
 ]
