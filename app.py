@@ -5,24 +5,45 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import logging
 import os
+import importlib
 
 # Import custom modules
 from utils.data_loader import get_forex_data, get_available_pairs
 from utils.technical_indicators import add_all_indicators
-from utils.preprocessing import prepare_data_for_training, prepare_sequence_data, feature_selection
+from utils.preprocessing import prepare_data_for_training, feature_selection
 from utils.visualization import plot_candlestick_with_indicators, plot_model_performance, plot_feature_importance
 from utils.news_api import get_news_sentiment_for_pair
 from utils.economic_calendar import get_economic_calendar
 from models.machine_learning import train_evaluate_ml_models
-# Import deep learning module
-from models.deep_learning import train_evaluate_lstm, create_lstm_model, save_model, load_model
 from backtest.strategy import run_backtest
-# Import telegram notification module
-from utils.telegram_notification import (
-    send_message, send_price_alert, send_ml_prediction, 
-    send_trading_signal, send_lstm_prediction, is_telegram_configured
-)
-from config import ENABLE_LSTM, ENABLE_TELEGRAM
+
+# Try to import telegram notification module
+try:
+    from utils.telegram_notification import (
+        send_message, send_price_alert, send_ml_prediction, 
+        send_trading_signal, send_lstm_prediction, is_telegram_configured
+    )
+    TELEGRAM_AVAILABLE = True
+except ImportError:
+    TELEGRAM_AVAILABLE = False
+    logging.warning("Telegram notification module could not be imported")
+
+# Try to import deep learning modules dynamically
+LSTM_AVAILABLE = False
+try:
+    # Check if TensorFlow is available
+    import tensorflow as tf
+    from models.deep_learning import train_evaluate_lstm, create_lstm_model, save_model, load_model
+    LSTM_AVAILABLE = True
+    logging.info("TensorFlow and LSTM modules loaded successfully")
+except ImportError:
+    logging.warning("TensorFlow or LSTM modules could not be imported")
+    
+# Import configuration
+from config import ENABLE_TELEGRAM
+
+# Override ENABLE_LSTM based on actual availability
+ENABLE_LSTM = LSTM_AVAILABLE
 
 # Configure logging
 logging.basicConfig(
@@ -131,20 +152,27 @@ st.sidebar.header("Model Selection")
 use_random_forest = st.sidebar.checkbox("Random Forest", value=True)
 use_xgboost = st.sidebar.checkbox("XGBoost", value=True)
 use_gradient_boosting = st.sidebar.checkbox("Gradient Boosting", value=False)
-# LSTM (deep learning) option
-use_lstm = st.sidebar.checkbox("LSTM (Deep Learning)", value=ENABLE_LSTM, 
-                            help="Use Long Short-Term Memory neural networks for predictions")
 
-# LSTM parameters if enabled
-if use_lstm:
-    st.sidebar.subheader("LSTM Parameters")
-    lstm_units = st.sidebar.slider("LSTM Units", 16, 128, 64, step=16)
-    lstm_dropout = st.sidebar.slider("Dropout Rate", 0.1, 0.5, 0.2, step=0.1)
-    lstm_epochs = st.sidebar.slider("Training Epochs", 10, 100, 50, step=10)
-    sequence_length = st.sidebar.slider("Sequence Length", 5, 30, 10, step=1)
+# LSTM (deep learning) option - only enable if actually available
+if LSTM_AVAILABLE:
+    use_lstm = st.sidebar.checkbox("LSTM (Deep Learning)", value=True,
+                                help="Use Long Short-Term Memory neural networks for predictions")
+    
+    # LSTM parameters if enabled
+    if use_lstm:
+        st.sidebar.subheader("LSTM Parameters")
+        lstm_units = st.sidebar.slider("LSTM Units", 16, 128, 64, step=16)
+        lstm_dropout = st.sidebar.slider("Dropout Rate", 0.1, 0.5, 0.2, step=0.1)
+        lstm_epochs = st.sidebar.slider("Training Epochs", 10, 100, 50, step=10)
+        sequence_length = st.sidebar.slider("Sequence Length", 5, 30, 10, step=1)
+else:
+    # If LSTM is not available, show a disabled checkbox with explanation
+    use_lstm = st.sidebar.checkbox("LSTM (Deep Learning)", value=False, disabled=True,
+                                help="LSTM requires TensorFlow, which is not available in this environment")
+    st.sidebar.info("💡 LSTM functionality is disabled because TensorFlow could not be imported. This might be due to compatibility issues with the current environment.")
     
 # Telegram notification options
-if ENABLE_TELEGRAM:
+if TELEGRAM_AVAILABLE and ENABLE_TELEGRAM:
     st.sidebar.header("Telegram Notifications")
     use_telegram = st.sidebar.checkbox("Enable Telegram Notifications", value=True,
                                     help="Send trading signals and alerts to Telegram")
@@ -153,16 +181,26 @@ if ENABLE_TELEGRAM:
     if use_telegram:
         notification_types = st.sidebar.multiselect(
             "Notification Types",
-            ["LSTM Predictions", "ML Predictions", "Trading Signals", "Price Alerts"],
-            default=["LSTM Predictions", "Trading Signals"]
+            ["ML Predictions", "Trading Signals", "Price Alerts"],
+            default=["Trading Signals", "Price Alerts"]
         )
         
+        # Add LSTM predictions option only if LSTM is available
+        if LSTM_AVAILABLE and use_lstm:
+            if "LSTM Predictions" not in notification_types:
+                notification_types.append("LSTM Predictions")
+        
         # Telegram status indicator
-        telegram_configured = is_telegram_configured()
-        if telegram_configured:
-            st.sidebar.success("✅ Telegram bot configured")
-        else:
-            st.sidebar.warning("⚠️ Telegram bot not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in environment variables.")
+        try:
+            telegram_configured = is_telegram_configured()
+            if telegram_configured:
+                st.sidebar.success("✅ Telegram bot configured")
+            else:
+                st.sidebar.warning("⚠️ Telegram bot not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in environment variables.")
+        except:
+            st.sidebar.warning("⚠️ Unable to check Telegram configuration status")
+else:
+    use_telegram = False
 
 # Add a note about data requirements for ML models
 st.sidebar.info("Note: Machine learning models require sufficient historical data. For daily data, select a period of at least '1mo' or longer.")
@@ -450,28 +488,187 @@ try:
                     st.plotly_chart(fig_imp, use_container_width=True)
 
         # Train and evaluate LSTM model
-        if use_lstm:
-            with st.spinner("Training and evaluating LSTM model..."):
-                st.info("Deep learning functionality is temporarily disabled due to compatibility issues with TensorFlow and NumPy.")
+        if use_lstm and LSTM_AVAILABLE:
+            try:
+                with st.spinner("Training and evaluating LSTM model..."):
+                    # Prepare sequence data for LSTM
+                    from utils.preprocessing import prepare_sequence_data
+                    
+                    # Create a new subheader for LSTM section
+                    st.subheader("LSTM Model Performance")
+                    
+                    # Prepare data in sequence format
+                    X_train_seq, X_test_seq, y_train_seq, y_test_seq = prepare_sequence_data(
+                        data_with_indicators, 
+                        seq_length=sequence_length,
+                        prediction_horizon=prediction_horizon,
+                        train_size=train_test_split/100.0
+                    )
+                    
+                    st.write(f"Prepared sequence data with {sequence_length} time steps for LSTM model")
+                    
+                    # Train and evaluate LSTM model
+                    lstm_results = train_evaluate_lstm(
+                        X_train_seq, y_train_seq, 
+                        X_test_seq, y_test_seq,
+                        n_features=X_train_seq.shape[2],
+                        epochs=lstm_epochs,
+                        batch_size=32
+                    )
+                    
+                    # Display LSTM results
+                    lstm_model = lstm_results.get('model')
+                    lstm_accuracy = lstm_results.get('accuracy', 0)
+                    lstm_f1 = lstm_results.get('f1_score', 0)
+                    
+                    # Display performance metrics
+                    col1, col2, col3 = st.columns(3)
+                    col1.metric("Accuracy", f"{lstm_accuracy:.4f}")
+                    col2.metric("F1 Score", f"{lstm_f1:.4f}")
+                    col3.metric("Sequence Length", sequence_length)
+                    
+                    # Plot training history if available
+                    history = lstm_results.get('history')
+                    if history and hasattr(history, 'history'):
+                        hist = history.history
+                        epochs_range = range(1, len(hist['loss']) + 1)
+                        
+                        fig_lstm = go.Figure()
+                        fig_lstm.add_trace(go.Scatter(
+                            x=epochs_range, y=hist['loss'],
+                            mode='lines',
+                            name='Training Loss'
+                        ))
+                        fig_lstm.add_trace(go.Scatter(
+                            x=epochs_range, y=hist['val_loss'],
+                            mode='lines',
+                            name='Validation Loss'
+                        ))
+                        fig_lstm.update_layout(
+                            title='LSTM Training History',
+                            xaxis_title='Epochs',
+                            yaxis_title='Loss',
+                            template='plotly_white'
+                        )
+                        st.plotly_chart(fig_lstm, use_container_width=True)
+                    
+                    # Display prediction results
+                    predictions = lstm_results.get('predictions', [])
+                    if len(predictions) > 0:
+                        st.subheader("LSTM Predictions")
+                        
+                        # Create a DataFrame for predictions vs actual
+                        prediction_df = pd.DataFrame({
+                            'Actual': y_test_seq,
+                            'Predicted': predictions
+                        })
+                        
+                        # Plot predictions vs actual
+                        fig_pred = go.Figure()
+                        fig_pred.add_trace(go.Scatter(
+                            y=prediction_df['Actual'],
+                            mode='lines',
+                            name='Actual'
+                        ))
+                        fig_pred.add_trace(go.Scatter(
+                            y=prediction_df['Predicted'],
+                            mode='lines',
+                            name='Predicted'
+                        ))
+                        fig_pred.update_layout(
+                            title='LSTM Predictions vs Actual Values',
+                            xaxis_title='Time',
+                            yaxis_title='Value',
+                            template='plotly_white'
+                        )
+                        st.plotly_chart(fig_pred, use_container_width=True)
+                        
+                        # Make a prediction for the future
+                        st.subheader("Future Prediction")
+                        
+                        # Get the latest sequence of data
+                        latest_data = X_test_seq[-1:] if len(X_test_seq) > 0 else X_train_seq[-1:]
+                        
+                        # Make prediction
+                        future_pred = lstm_model.predict(latest_data)
+                        pred_value = future_pred[0][0]
+                        
+                        # Show prediction direction
+                        direction = "UP" if pred_value > 0.5 else "DOWN"
+                        confidence = abs(pred_value - 0.5) * 2  # Scale to 0-1 range
+                        
+                        # Display prediction
+                        col1, col2 = st.columns(2)
+                        col1.metric("Predicted Direction", direction, 
+                                   delta=f"{confidence:.2%} confidence",
+                                   delta_color="normal")
+                        col2.metric("Latest Price", f"{data_with_indicators['close'].iloc[-1]:.5f}")
+                        
+                        # Send Telegram notification if enabled
+                        if use_telegram and TELEGRAM_AVAILABLE and "LSTM Predictions" in notification_types:
+                            try:
+                                symbol_display = selected_pair.replace("=X", "")
+                                horizon_display = f"{prediction_horizon} periods ahead"
+                                
+                                # Prepare signal value (-1 to 1 range)
+                                signal_value = (pred_value - 0.5) * 2  # Convert 0-1 to -1 to 1
+                                
+                                # Send prediction notification
+                                send_lstm_prediction(
+                                    symbol=symbol_display,
+                                    prediction=signal_value,
+                                    actual=data_with_indicators['close'].iloc[-1],
+                                    confidence=confidence,
+                                    horizon=horizon_display
+                                )
+                                st.success("✅ LSTM prediction sent to Telegram")
+                            except Exception as e:
+                                st.error(f"Failed to send Telegram notification: {str(e)}")
+                    
+                    # Save the last LSTM result for trading signals
+                    if 'predictions' in lstm_results and len(lstm_results['predictions']) > 0:
+                        st.session_state['lstm_prediction'] = {
+                            'value': lstm_results['predictions'][-1],
+                            'confidence': abs(lstm_results['predictions'][-1] - 0.5) * 2
+                        }
+            except Exception as e:
+                st.error(f"Error in LSTM model training: {str(e)}")
+                st.info("Falling back to traditional ML models only")
                 
-                # Placeholder for LSTM results
-                st.subheader("LSTM Model Performance")
-                st.write("LSTM model is not available in this version.")
-                
-                # Create a placeholder figure
+                # Create a placeholder figure to show the error
                 fig_lstm = go.Figure()
                 fig_lstm.add_annotation(
-                    text="LSTM training visualization is not available",
+                    text=f"LSTM Error: {str(e)}",
                     xref="paper", yref="paper",
                     x=0.5, y=0.5, showarrow=False
                 )
                 fig_lstm.update_layout(
-                    title='LSTM Training (Not Available)',
+                    title='LSTM Training (Error)',
                     xaxis_title='Epochs',
                     yaxis_title='Loss',
                     template='plotly_white'
                 )
                 st.plotly_chart(fig_lstm, use_container_width=True)
+        elif use_lstm and not LSTM_AVAILABLE:
+            # Show explanation about LSTM being unavailable
+            st.subheader("LSTM Model (Unavailable)")
+            st.warning("⚠️ LSTM functionality is currently unavailable due to TensorFlow compatibility issues.")
+            st.info("💡 The application will use traditional machine learning models instead.")
+            
+            # Create a placeholder figure
+            fig_lstm = go.Figure()
+            fig_lstm.add_annotation(
+                text="LSTM requires TensorFlow, which is not available in this environment",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
+            fig_lstm.update_layout(
+                title='LSTM Training (Unavailable)',
+                xaxis_title='Epochs',
+                yaxis_title='Loss',
+                template='plotly_white'
+            )
+            st.plotly_chart(fig_lstm, use_container_width=True)
 
         # Backtesting
         st.header("Strategy Backtesting")
@@ -483,13 +680,73 @@ try:
             if use_random_forest or use_xgboost or use_gradient_boosting:
                 if 'ml_prediction_data' in locals() and ml_prediction_data is not None:
                     backtesting_prediction_data = ml_prediction_data
+                    
+            # Use LSTM predictions if available (override ML predictions)
+            if use_lstm and LSTM_AVAILABLE and 'lstm_prediction' in st.session_state:
+                # Create/update prediction data with LSTM results
+                if backtesting_prediction_data is None:
+                    backtesting_prediction_data = {}
+                
+                # Add LSTM prediction info
+                backtesting_prediction_data['lstm'] = st.session_state['lstm_prediction']
+                backtesting_prediction_data['model_type'] = 'LSTM'
             
+            # Run backtest with the appropriate prediction data
             backtest_results = run_backtest(
                 data_with_indicators, 
                 strategy_type=strategy_type,
                 initial_capital=initial_capital,
                 prediction_data=backtesting_prediction_data
             )
+            
+            # Send trading signal to Telegram if enabled
+            if use_telegram and TELEGRAM_AVAILABLE and "Trading Signals" in notification_types:
+                try:
+                    # Get the last trading signal
+                    if 'signals' in backtest_results and len(backtest_results['signals']) > 0:
+                        # Get the last signal
+                        last_signal = backtest_results['signals'].iloc[-1]
+                        last_price = data_with_indicators['close'].iloc[-1]
+                        
+                        # Determine signal type
+                        signal_type = "NEUTRAL"
+                        if last_signal > 0:
+                            signal_type = "BUY"
+                        elif last_signal < 0:
+                            signal_type = "SELL"
+                        
+                        # Only send non-neutral signals
+                        if signal_type != "NEUTRAL":
+                            # Format symbol for display
+                            symbol_display = selected_pair.replace("=X", "")
+                            
+                            # Prepare additional parameters
+                            strategy_params = {
+                                "Strategy Type": strategy_type,
+                                "Timeframe": selected_interval
+                            }
+                            
+                            # Add model info if ML/LSTM was used
+                            if strategy_type == "ML/DL Signal" and backtesting_prediction_data is not None:
+                                model_type = backtesting_prediction_data.get('model_type', "Unknown")
+                                strategy_params["Model"] = model_type
+                                
+                                # Add confidence if available
+                                if 'confidence' in backtesting_prediction_data.get('lstm', {}):
+                                    confidence = backtesting_prediction_data['lstm']['confidence']
+                                    strategy_params["Confidence"] = f"{confidence:.2%}"
+                            
+                            # Send the trading signal
+                            send_trading_signal(
+                                symbol=symbol_display,
+                                signal_type=signal_type,
+                                price=last_price,
+                                strategy=strategy_type,
+                                params=strategy_params
+                            )
+                            st.success(f"✅ {signal_type} signal for {symbol_display} sent to Telegram")
+                except Exception as e:
+                    st.error(f"Failed to send trading signal to Telegram: {str(e)}")
             
             # Display backtest results
             st.subheader("Backtest Performance")
