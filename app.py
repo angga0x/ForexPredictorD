@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import logging
 import os
 import importlib
+import time
 
 # Import custom modules
 from utils.data_loader import get_forex_data, get_available_pairs
@@ -14,6 +15,7 @@ from utils.preprocessing import prepare_data_for_training, feature_selection
 from utils.visualization import plot_candlestick_with_indicators, plot_model_performance, plot_feature_importance
 from utils.news_api import get_news_sentiment_for_pair
 from utils.economic_calendar import get_economic_calendar
+from utils.prediction_summary import format_prediction_summary, get_prediction_summary_html
 from models.machine_learning import train_evaluate_ml_models
 from backtest.strategy import run_backtest
 
@@ -431,8 +433,11 @@ try:
         fig = plot_candlestick_with_indicators(data_with_indicators, selected_pair)
         st.plotly_chart(fig, use_container_width=True)
 
-    # Only run analysis when the button is clicked
+    # Start tracking time when analysis button is clicked
+    analysis_start_time = None
     if analyze_button:
+        analysis_start_time = time.time()
+        
         # Model training and evaluation
         st.header("Prediction Models")
         
@@ -798,6 +803,140 @@ try:
                 st.subheader("Strategy Trades")
                 st.plotly_chart(fig_trades, use_container_width=True)
     
+    # Generate prediction summary
+    if analyze_button:
+        st.header("Ringkasan Prediksi")
+        
+        # Calculate processing time if available
+        processing_time = None
+        if analysis_start_time is not None:
+            processing_time = time.time() - analysis_start_time
+        
+        # Determine latest prediction and confidence
+        prediction_direction = "NEUTRAL"
+        confidence = 0.5
+        model_used = "ML"
+        
+        # Check if we have ML predictions
+        if 'ml_prediction_data' in locals() and ml_prediction_data is not None and 'prediction' in ml_prediction_data:
+            pred_value = ml_prediction_data['prediction']
+            if pred_value > 0.55:
+                prediction_direction = "UP"
+                confidence = pred_value
+            elif pred_value < 0.45:
+                prediction_direction = "DOWN"
+                confidence = 1 - pred_value
+            model_used = ml_prediction_data.get('model_name', 'ML Model')
+        
+        # Check if we have LSTM predictions (override ML if available)
+        if 'lstm_prediction' in st.session_state:
+            lstm_pred = st.session_state['lstm_prediction']
+            pred_value = lstm_pred.get('value', 0.5)
+            
+            if pred_value > 0.55:
+                prediction_direction = "UP"
+                confidence = pred_value
+            elif pred_value < 0.45:
+                prediction_direction = "DOWN"
+                confidence = 1 - pred_value
+            model_used = "LSTM"
+        
+        # Get last trading signal from backtest (override ML/LSTM if clear signal)
+        if 'backtest_results' in locals() and backtest_results is not None:
+            if 'signals' in backtest_results and len(backtest_results['signals']) > 0:
+                last_signal = backtest_results['signals'].iloc[-1]
+                if abs(last_signal) > 0.7:  # Only override if strong signal
+                    if last_signal > 0:
+                        prediction_direction = "UP"
+                        confidence = min(abs(last_signal), 0.95)  # Cap at 0.95
+                    elif last_signal < 0:
+                        prediction_direction = "DOWN"
+                        confidence = min(abs(last_signal), 0.95)  # Cap at 0.95
+                    model_used = strategy_type
+        
+        # Get ATR value if available for target calculation
+        atr_value = None
+        if 'atr' in data_with_indicators.columns:
+            atr_value = data_with_indicators['atr'].iloc[-1]
+        
+        # Get period in days
+        period_days = None
+        if not use_date_range and selected_period != "max":
+            # Extract number from period string like "1mo", "5d", etc.
+            import re
+            period_match = re.match(r'(\d+)([dmy])', selected_period)
+            if period_match:
+                num = int(period_match.group(1))
+                unit = period_match.group(2)
+                if unit == 'd':
+                    period_days = num
+                elif unit == 'm':
+                    period_days = num * 30
+                elif unit == 'y':
+                    period_days = num * 365
+        elif use_date_range and start_date and end_date:
+            # Calculate days between dates
+            period_days = (end_date - start_date).days
+        
+        # Create prediction summary
+        if prediction_direction != "NEUTRAL":
+            # HTML formatted summary
+            summary_html = get_prediction_summary_html(
+                symbol=selected_pair,
+                direction=prediction_direction,
+                confidence=confidence,
+                current_price=data_with_indicators['close'].iloc[-1],
+                model_type=model_used,
+                timeframe=selected_interval,
+                atr_value=atr_value,
+                processing_time=processing_time,
+                period_days=period_days
+            )
+            
+            # Display summary
+            st.markdown(summary_html, unsafe_allow_html=True)
+            
+            # Plain text format for Telegram
+            summary_text = format_prediction_summary(
+                symbol=selected_pair,
+                direction=prediction_direction,
+                confidence=confidence,
+                current_price=data_with_indicators['close'].iloc[-1],
+                model_type=model_used,
+                timeframe=selected_interval,
+                atr_value=atr_value,
+                processing_time=processing_time,
+                period_days=period_days
+            )
+            
+            # Send prediction summary to Telegram if enabled
+            if 'use_telegram' in locals() and use_telegram and TELEGRAM_AVAILABLE:
+                try:
+                    # Get notification types if available
+                    notification_types_list = []
+                    if 'notification_types' in locals() and notification_types is not None:
+                        notification_types_list = notification_types
+                    
+                    # Only send if in notification types or if ML Predictions selected
+                    if not notification_types_list or "ML Predictions" in notification_types_list or "LSTM Predictions" in notification_types_list:
+                        # Use the imported send_message function directly
+                        if 'send_message' in globals():
+                            send_message(summary_text)
+                            st.success("✅ Prediction summary sent to Telegram")
+                except Exception as e:
+                    st.error(f"Failed to send prediction summary to Telegram: {str(e)}")
+        else:
+            st.info("No clear prediction direction identified. Consider adjusting model parameters or using a different strategy.")
+            
+            # Create a neutral summary
+            st.markdown(f"""
+            <div style="padding:20px; border-radius:10px; background-color:#f8f9fa; border-left:5px solid gray; margin-bottom:20px;">
+                <h3 style="color:gray; margin:0 0 15px 0;">Neutral Market Outlook</h3>
+                <p>The current analysis does not show a clear directional bias for {selected_pair.replace('=X', '')}.</p>
+                <p>Consider adjusting your analysis parameters or trying a different strategy.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
     # Disclaimer
     st.info(
         "**Disclaimer**: This tool is for educational and research purposes only. "
