@@ -492,17 +492,22 @@ try:
                 with st.spinner("Training and evaluating LSTM model..."):
                     # Prepare sequence data for LSTM
                     from utils.preprocessing import prepare_sequence_data
+                    from models.deep_learning import train_evaluate_lstm
                     
                     # Create a new subheader for LSTM section
                     st.subheader("LSTM Model Performance")
                     
                     # Prepare data in sequence format
-                    X_train_seq, X_test_seq, y_train_seq, y_test_seq = prepare_sequence_data(
+                    # Handle the 5 return values (including feature_columns at the end)
+                    sequence_data = prepare_sequence_data(
                         data_with_indicators, 
                         seq_length=sequence_length,
                         prediction_horizon=prediction_horizon,
                         train_size=train_test_split/100.0
                     )
+                    
+                    # Unpack only the needed values
+                    X_train_seq, X_test_seq, y_train_seq, y_test_seq = sequence_data[:4]
                     
                     st.write(f"Prepared sequence data with {sequence_length} time steps for LSTM model")
                     
