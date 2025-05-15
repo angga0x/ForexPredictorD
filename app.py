@@ -11,6 +11,7 @@ from utils.data_loader import get_forex_data, get_available_pairs
 from utils.technical_indicators import add_all_indicators
 from utils.preprocessing import prepare_data_for_training, feature_selection
 from utils.visualization import plot_candlestick_with_indicators, plot_model_performance, plot_feature_importance
+from utils.news_api import get_news_sentiment_for_pair
 from models.machine_learning import train_evaluate_ml_models
 # Temporarily disable deep learning module due to compatibility issues
 # from models.deep_learning import train_evaluate_lstm
@@ -171,6 +172,70 @@ try:
             st.success(f"Data retrieved from: **{data.attrs['data_source']}**")
         else:
             st.info("Data source information not available")
+            
+    # Fetch and display news sentiment analysis
+    st.header("Market News Sentiment Analysis")
+    
+    # Add news lookup period selection in sidebar if not already present
+    if 'news_days' not in locals() and 'news_days' not in globals():
+        news_days = 7
+        st.sidebar.header("News Analysis")
+        news_days = st.sidebar.slider("News Lookup Period (Days)", 1, 30, 7)
+    
+    with st.spinner("Fetching and analyzing forex news..."):
+        # Get news sentiment for the selected pair
+        news_sentiment = get_news_sentiment_for_pair(selected_pair, days=news_days)
+        
+        # Display sentiment overview
+        col1, col2, col3 = st.columns(3)
+        
+        overall_sentiment = news_sentiment.get('overall_sentiment', 0)
+        sentiment_label = "Neutral"
+        sentiment_color = "gray"
+        
+        if overall_sentiment > 0.1:
+            sentiment_label = "Positive"
+            sentiment_color = "green"
+        elif overall_sentiment < -0.1:
+            sentiment_label = "Negative"
+            sentiment_color = "red"
+        
+        col1.metric("Overall Sentiment", f"{sentiment_label} ({overall_sentiment:.2f})")
+        col2.metric("Articles Analyzed", news_sentiment.get('article_count', 0))
+        col3.metric("Lookback Period", f"{news_days} days")
+        
+        # Display sentiment explanation
+        st.markdown(f"""
+        <div style="padding:10px;border-radius:5px;background-color:{sentiment_color if sentiment_color != 'gray' else '#f0f0f0'};color:{'white' if sentiment_color != 'gray' else 'black'};margin:10px 0px;">
+            <h4>News Sentiment: {sentiment_label} ({overall_sentiment:.2f})</h4>
+            <p>The overall market news sentiment for {selected_pair} is <strong>{sentiment_label.lower()}</strong> based on news articles from the past {news_days} days.</p>
+            <p>Score ranges from -1 (very negative) to +1 (very positive), with 0 being neutral.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Display news articles if available
+        articles_df = news_sentiment.get('articles_df', pd.DataFrame())
+        if not articles_df.empty:
+            st.subheader("Recent News Articles")
+            
+            # Sort by sentiment and then by date
+            articles_df = articles_df.sort_values(by=['sentiment', 'published_at'], ascending=[False, False])
+            
+            with st.expander("View News Articles"):
+                for idx, row in articles_df.iterrows():
+                    sentiment_color = "gray"
+                    if row['sentiment'] > 0.1:
+                        sentiment_color = "green"
+                    elif row['sentiment'] < -0.1:
+                        sentiment_color = "red"
+                    
+                    st.markdown(f"""
+                    <div style="padding:10px;border-radius:5px;border-left:5px solid {sentiment_color};margin:10px 0px;">
+                        <h5>{row['title']}</h5>
+                        <p><small>Source: {row['source']} | Published: {row['published_at']}</small></p>
+                        <p><strong>Sentiment Score:</strong> <span style="color:{sentiment_color};">{row['sentiment']:.2f}</span></p>
+                    </div>
+                    """, unsafe_allow_html=True)
 
     # Calculate technical indicators
     with st.spinner("Calculating technical indicators..."):

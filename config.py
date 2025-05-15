@@ -51,6 +51,7 @@ DEFAULT_CANDLESTICK_COLORS = {
 
 # API keys (should be loaded from environment variables in production)
 TWELVE_DATA_API_KEY = "745c7fd1c34942dab4639a398bef1a81"  # os.getenv("TWELVE_DATA_API_KEY", "")
+NEWS_API_KEY = "3c4b6e6dffa0457b9c29727da56f9464"  # os.getenv("NEWS_API_KEY", "")
 
 # Logging parameters
 LOG_LEVEL = "INFO"
