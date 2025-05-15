@@ -101,7 +101,12 @@ st.sidebar.header("Model Selection")
 use_random_forest = st.sidebar.checkbox("Random Forest", value=True)
 use_xgboost = st.sidebar.checkbox("XGBoost", value=True)
 use_gradient_boosting = st.sidebar.checkbox("Gradient Boosting", value=False)
-use_lstm = st.sidebar.checkbox("LSTM (Deep Learning)", value=False)
+# Disable LSTM with explanation
+use_lstm = st.sidebar.checkbox("LSTM (Deep Learning)", value=False, disabled=True, 
+                             help="Temporarily disabled due to compatibility issues with TensorFlow and NumPy")
+
+# Add a note about data requirements for ML models
+st.sidebar.info("Note: Machine learning models require sufficient historical data. For daily data, select a period of at least '1mo' or longer.")
 
 # Backtesting parameters
 st.sidebar.header("Backtesting Parameters")

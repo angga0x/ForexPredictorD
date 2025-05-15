@@ -9,7 +9,7 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
-def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_column='close'):
+def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_column='close', min_samples=30):
     """
     Prepare data for model training by creating features and target variables.
     
@@ -18,6 +18,7 @@ def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_c
         prediction_horizon (int, optional): Number of periods ahead to predict. Default is 5.
         train_size (float, optional): Proportion of data to use for training. Default is 0.8.
         target_column (str, optional): Column to use for target generation. Default is 'close'.
+        min_samples (int, optional): Minimum number of samples required. Default is 30.
         
     Returns:
         tuple: (X_train, X_test, y_train, y_test, feature_names)
@@ -28,6 +29,11 @@ def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_c
         # Create a copy of the dataframe
         data = df.copy()
         
+        # Check if we have enough data
+        if len(data) <= prediction_horizon + 5:  # Need at least prediction_horizon + some extra samples
+            logger.error(f"Not enough data for training: {len(data)} rows is insufficient")
+            return pd.DataFrame(), pd.DataFrame(), pd.Series(), pd.Series(), []
+        
         # Drop rows with NaN values
         data = data.dropna()
         
@@ -36,6 +42,11 @@ def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_c
         
         # Remove rows where target is NaN (at the end of the dataframe)
         data = data.dropna(subset=['target'])
+        
+        # Check if we still have enough data after cleaning
+        if len(data) < min_samples:
+            logger.error(f"Insufficient data after preprocessing: {len(data)} < {min_samples} minimum required samples")
+            return pd.DataFrame(), pd.DataFrame(), pd.Series(), pd.Series(), []
         
         # Select features (exclude date, target, and raw OHLCV data)
         exclude_columns = ['date', 'target', 'open', 'high', 'low', 'close', 'volume']
@@ -51,12 +62,24 @@ def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_c
         X = data[feature_columns]
         y = data['target']
         
+        # Check if we have data to scale
+        if len(X) == 0:
+            logger.error("No data available for feature scaling")
+            return pd.DataFrame(), pd.DataFrame(), pd.Series(), pd.Series(), []
+            
         # Scale features
         scaler = StandardScaler()
         X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns, index=X.index)
         
         # Split into training and test sets
         split_idx = int(len(X_scaled) * train_size)
+        
+        # Ensure we have at least one sample in each set
+        if split_idx == 0:
+            split_idx = 1  # At least one sample for training
+        elif split_idx == len(X_scaled):
+            split_idx = len(X_scaled) - 1  # At least one sample for testing
+            
         X_train = X_scaled.iloc[:split_idx]
         X_test = X_scaled.iloc[split_idx:]
         y_train = y.iloc[:split_idx]
