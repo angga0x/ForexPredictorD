@@ -12,6 +12,7 @@ from utils.technical_indicators import add_all_indicators
 from utils.preprocessing import prepare_data_for_training, feature_selection
 from utils.visualization import plot_candlestick_with_indicators, plot_model_performance, plot_feature_importance
 from utils.news_api import get_news_sentiment_for_pair
+from utils.economic_calendar import get_economic_calendar
 from models.machine_learning import train_evaluate_ml_models
 # Temporarily disable deep learning module due to compatibility issues
 # from models.deep_learning import train_evaluate_lstm
@@ -177,8 +178,15 @@ try:
     st.header("Market News Sentiment Analysis")
     
     # Add news lookup period selection in sidebar
-    st.sidebar.header("News Analysis")
-    news_days = st.sidebar.slider("News Lookup Period (Days)", 1, 30, 7)
+    st.sidebar.header("News & Economic Calendar")
+    news_days = st.sidebar.slider("News & Events Lookup Period (Days)", 1, 30, 7)
+    
+    # Add economic calendar sources selection
+    calendar_sources = st.sidebar.multiselect(
+        "Economic Calendar Sources",
+        ["investing", "forexfactory"],
+        default=["forexfactory"]
+    )
     
     with st.spinner("Fetching and analyzing forex news..."):
         # Get news sentiment for the selected pair
@@ -234,6 +242,89 @@ try:
                         <p><strong>Sentiment Score:</strong> <span style="color:{sentiment_color};">{row['sentiment']:.2f}</span></p>
                     </div>
                     """, unsafe_allow_html=True)
+    
+    # Fetch and display economic calendar data
+    st.header("Economic Calendar")
+    
+    with st.spinner("Fetching economic calendar data..."):
+        # Get economic calendar data from selected sources
+        if calendar_sources:
+            calendar_data = get_economic_calendar(days=news_days, sources=calendar_sources)
+            
+            if calendar_data:
+                # Display the calendar data
+                for source, df in calendar_data.items():
+                    if source == 'text_content':
+                        # Handle text content fallback
+                        st.subheader(f"Raw Calendar Data (Fallback Mode)")
+                        if not df.empty:
+                            with st.expander("View raw calendar content"):
+                                st.text(df.iloc[0]['raw_content'][:2000] + "...")
+                    else:
+                        # Handle structured calendar data
+                        st.subheader(f"Economic Events from {source.capitalize()}")
+                        
+                        if not df.empty:
+                            # Filter for events matching the currency pair if possible
+                            filtered_df = df
+                            
+                            # Extract currency info from selected pair
+                            if "=" in selected_pair:
+                                base_currency = selected_pair[:3]
+                                quote_currency = selected_pair[3:6]
+                            else:
+                                base_currency = selected_pair[:3]
+                                quote_currency = selected_pair[3:]
+                                
+                            # Try to filter events for the selected currency pair
+                            try:
+                                if 'currency' in df.columns:
+                                    filtered_df = df[df['currency'].str.contains(base_currency, case=False) | 
+                                                    df['currency'].str.contains(quote_currency, case=False)]
+                                elif 'country' in df.columns:
+                                    filtered_df = df[df['country'].str.contains(base_currency, case=False) | 
+                                                   df['country'].str.contains(quote_currency, case=False)]
+                            except:
+                                # If filtering fails, use original dataframe
+                                filtered_df = df
+                            
+                            # Display as a table if structured data is available
+                            if len(filtered_df) > 0:
+                                # Sort by impact and time
+                                try:
+                                    filtered_df = filtered_df.sort_values(by=['impact', 'time'], ascending=[False, True])
+                                except:
+                                    pass
+                                
+                                # Create high/medium/low impact event tables
+                                if 'impact' in filtered_df.columns:
+                                    # High impact events
+                                    high_impact = filtered_df[filtered_df['impact'] >= 3]
+                                    if not high_impact.empty:
+                                        st.warning("⚠️ High Impact Events")
+                                        st.dataframe(high_impact)
+                                    
+                                    # Medium impact events
+                                    medium_impact = filtered_df[(filtered_df['impact'] >= 2) & (filtered_df['impact'] < 3)]
+                                    if not medium_impact.empty:
+                                        st.info("ℹ️ Medium Impact Events")
+                                        st.dataframe(medium_impact)
+                                    
+                                    # Low impact events
+                                    low_impact = filtered_df[filtered_df['impact'] < 2]
+                                    if not low_impact.empty:
+                                        with st.expander("View Low Impact Events"):
+                                            st.dataframe(low_impact)
+                                else:
+                                    st.dataframe(filtered_df)
+                            else:
+                                st.info(f"No economic events found for {selected_pair} in the next {news_days} days.")
+                        else:
+                            st.error(f"No data available from {source}.")
+            else:
+                st.error("Failed to retrieve economic calendar data from any source.")
+        else:
+            st.info("Please select at least one economic calendar source in the sidebar.")
 
     # Calculate technical indicators
     with st.spinner("Calculating technical indicators..."):
