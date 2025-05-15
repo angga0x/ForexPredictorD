@@ -217,7 +217,7 @@ def add_stoch_rsi(df, period=14, smooth_k=3, smooth_d=3):
 
 def add_all_indicators(df, sma_period=20, ema_period=20, rsi_period=14, 
                        macd_fast=12, macd_slow=26, macd_signal=9,
-                       bb_period=20, bb_std=2, atr_period=14,
+                       bb_period=20, bb_std=2.0, atr_period=14,
                        stoch_rsi_period=14, stoch_rsi_smooth_k=3, stoch_rsi_smooth_d=3):
     """
     Add all technical indicators to DataFrame.

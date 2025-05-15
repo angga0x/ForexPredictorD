@@ -54,11 +54,16 @@ selected_period = st.sidebar.selectbox("Select Time Period", period_options, ind
 
 # Or use date range picker
 use_date_range = st.sidebar.checkbox("Use Custom Date Range")
+
+# Initialize date variables with default values
+start_date = None
+end_date = None
+
 if use_date_range:
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=90)
-    start_date = st.sidebar.date_input("Start Date", start_date)
-    end_date = st.sidebar.date_input("End Date", end_date)
+    end_date_default = datetime.now()
+    start_date_default = end_date_default - timedelta(days=90)
+    start_date = st.sidebar.date_input("Start Date", start_date_default)
+    end_date = st.sidebar.date_input("End Date", end_date_default)
     if start_date >= end_date:
         st.sidebar.error("End date must be after start date.")
 
@@ -113,8 +118,14 @@ analyze_button = st.sidebar.button("Run Analysis")
 try:
     # Load data
     with st.spinner("Loading forex data..."):
+        # Initialize variables to avoid "possibly unbound" errors
+        start_date_param = None
+        end_date_param = None
+        
         if use_date_range:
-            data = get_forex_data(selected_pair, start_date, end_date, selected_interval)
+            start_date_param = start_date
+            end_date_param = end_date
+            data = get_forex_data(selected_pair, start_date_param, end_date_param, selected_interval)
         else:
             data = get_forex_data(selected_pair, period=selected_period, interval=selected_interval)
         

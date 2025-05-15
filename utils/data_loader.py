@@ -43,17 +43,19 @@ def get_forex_data(symbol, start_date=None, end_date=None, interval="1d", period
         logger.info(f"Fetching data for {symbol} with interval {interval}")
         
         # Use either date range or period
-        if start_date and end_date:
+        if start_date is not None and end_date is not None:
             # Convert to string format if datetime objects
             if isinstance(start_date, datetime):
                 start_date = start_date.strftime('%Y-%m-%d')
             if isinstance(end_date, datetime):
                 end_date = end_date.strftime('%Y-%m-%d')
             
-            data = yf.download(symbol, start=start_date, end=end_date, interval=interval)
+            data = yf.download(symbol, start=start_date, end=end_date, interval=interval, progress=False)
         else:
             # If no dates provided, use period
-            data = yf.download(symbol, period=period, interval=interval)
+            if period is None:
+                period = "1mo"  # Default to 1 month if neither dates nor period provided
+            data = yf.download(symbol, period=period, interval=interval, progress=False)
         
         if data.empty:
             logger.warning(f"No data returned for {symbol}")
@@ -70,7 +72,7 @@ def get_forex_data(symbol, start_date=None, end_date=None, interval="1d", period
                 data['Volume'] = 0
         
         # Rename columns for consistency
-        data.columns = [col.lower() for col in data.columns]
+        data.columns = [str(col).lower() for col in data.columns]
         
         # Handle duplicate indices if any
         if data.index.duplicated().any():
