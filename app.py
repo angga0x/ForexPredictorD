@@ -811,16 +811,108 @@ try:
         confidence = 0.5
         model_used = "ML"
         
-        # Check if we have ML predictions - using more sensitive thresholds
-        if 'ml_prediction_data' in locals() and ml_prediction_data is not None and 'prediction' in ml_prediction_data:
+        # Implement new technical indicators consensus strategy
+        # This will check multiple indicators to get a stronger overall signal
+        try:
+            # Get latest data point with indicators
+            latest_data = data_with_indicators.iloc[-1]
+            
+            # Initialize signal counters
+            bullish_signals = 0
+            bearish_signals = 0
+            
+            # Check RSI (below 30 = oversold/bullish, above 70 = overbought/bearish)
+            rsi_col = [col for col in latest_data.index if 'rsi_' in col and 'stoch' not in col]
+            if rsi_col:
+                rsi_value = latest_data[rsi_col[0]]
+                if rsi_value < 30:
+                    bullish_signals += 1
+                elif rsi_value > 70:
+                    bearish_signals += 1
+            
+            # Check MACD (MACD above signal = bullish, below = bearish)
+            if 'macd_line' in latest_data and 'macd_signal' in latest_data:
+                if latest_data['macd_line'] > latest_data['macd_signal']:
+                    bullish_signals += 1
+                elif latest_data['macd_line'] < latest_data['macd_signal']:
+                    bearish_signals += 1
+                
+                # Add another signal if MACD is strongly trending
+                if latest_data['macd_line'] > latest_data['macd_signal'] * 1.1:  # 10% above
+                    bullish_signals += 0.5
+                elif latest_data['macd_line'] < latest_data['macd_signal'] * 0.9:  # 10% below
+                    bearish_signals += 0.5
+            
+            # Check Bollinger Bands
+            bb_upper_col = [col for col in latest_data.index if 'bb_upper_' in col]
+            bb_lower_col = [col for col in latest_data.index if 'bb_lower_' in col]
+            
+            if 'close' in latest_data and bb_upper_col and bb_lower_col:
+                if latest_data['close'] < latest_data[bb_lower_col[0]]:
+                    bullish_signals += 1  # Price below lower band = potential bounce (bullish)
+                elif latest_data['close'] > latest_data[bb_upper_col[0]]:
+                    bearish_signals += 1  # Price above upper band = potential reversal (bearish)
+            
+            # Check Moving Average Crossovers
+            if 'sma_20' in latest_data and 'sma_50' in latest_data:
+                if latest_data['sma_20'] > latest_data['sma_50']:
+                    bullish_signals += 1  # Short term MA above long term = bullish
+                elif latest_data['sma_20'] < latest_data['sma_50']:
+                    bearish_signals += 1  # Short term MA below long term = bearish
+            
+            # Check ADX - strong trend confirmation
+            if 'adx' in latest_data and 'plus_di' in latest_data and 'minus_di' in latest_data:
+                # ADX above 25 indicates a strong trend
+                if latest_data['adx'] > 25:
+                    # If +DI > -DI, bullish trend is strong
+                    if latest_data['plus_di'] > latest_data['minus_di']:
+                        bullish_signals += 1
+                    # If -DI > +DI, bearish trend is strong
+                    elif latest_data['minus_di'] > latest_data['plus_di']:
+                        bearish_signals += 1
+            
+            # Check Stochastic oscillator
+            if 'stoch_k' in latest_data and 'stoch_d' in latest_data:
+                # Bullish if K crosses above D in oversold territory
+                if latest_data['stoch_k'] > latest_data['stoch_d'] and latest_data['stoch_k'] < 20:
+                    bullish_signals += 1
+                # Bearish if K crosses below D in overbought territory
+                elif latest_data['stoch_k'] < latest_data['stoch_d'] and latest_data['stoch_k'] > 80:
+                    bearish_signals += 1
+            
+            # Check short-term momentum with 9-day MA
+            if 'sma_9' in latest_data and 'close' in latest_data:
+                if latest_data['close'] > latest_data['sma_9']:
+                    bullish_signals += 0.5  # Price above short MA = bullish momentum
+                elif latest_data['close'] < latest_data['sma_9']:
+                    bearish_signals += 0.5  # Price below short MA = bearish momentum
+            
+            # Make prediction based on signal count
+            total_signals = bullish_signals + bearish_signals
+            if total_signals > 0:
+                if bullish_signals > bearish_signals:
+                    prediction_direction = "UP"
+                    # Calculate confidence based on signal dominance
+                    confidence = min(0.5 + (bullish_signals / total_signals) * 0.4, 0.95)
+                elif bearish_signals > bullish_signals:
+                    prediction_direction = "DOWN"
+                    # Calculate confidence based on signal dominance
+                    confidence = min(0.5 + (bearish_signals / total_signals) * 0.4, 0.95)
+                model_used = "Technical Consensus"
+        except Exception as e:
+            st.error(f"Error in technical indicator consensus check: {str(e)}")
+            # Will fall back to ML prediction
+        
+        # Check if we have ML predictions - use only if no consensus reached
+        if prediction_direction == "NEUTRAL" and 'ml_prediction_data' in locals() and ml_prediction_data is not None and 'prediction' in ml_prediction_data:
             pred_value = ml_prediction_data['prediction']
-            # More sensitive thresholds (0.52/0.48 instead of 0.55/0.45)
-            if pred_value > 0.52:
+            # Very sensitive thresholds (0.51/0.49 instead of 0.52/0.48)
+            if pred_value > 0.51:
                 prediction_direction = "UP"
                 confidence = pred_value 
                 # Scale confidence to make it more definitive for display
                 confidence = min(0.5 + (pred_value - 0.5) * 1.5, 0.95)
-            elif pred_value < 0.48:
+            elif pred_value < 0.49:
                 prediction_direction = "DOWN"
                 confidence = 1 - pred_value
                 # Scale confidence to make it more definitive for display

@@ -215,10 +215,89 @@ def add_stoch_rsi(df, period=14, smooth_k=3, smooth_d=3):
         logger.error(f"Error calculating Stochastic RSI: {str(e)}")
         return df
 
+def add_stochastic(df, k_period=14, d_period=3):
+    """
+    Add Stochastic Oscillator indicator to DataFrame.
+    
+    Args:
+        df (pd.DataFrame): DataFrame with price data
+        k_period (int, optional): K period. Default is 14.
+        d_period (int, optional): D period. Default is 3.
+        
+    Returns:
+        pd.DataFrame: DataFrame with added indicator
+    """
+    try:
+        # Create a copy to avoid SettingWithCopyWarning
+        result = df.copy()
+        
+        # Calculate %K
+        lowest_low = result['low'].rolling(window=k_period).min()
+        highest_high = result['high'].rolling(window=k_period).max()
+        result['stoch_k'] = 100 * ((result['close'] - lowest_low) / (highest_high - lowest_low))
+        
+        # Calculate %D (moving average of %K)
+        result['stoch_d'] = result['stoch_k'].rolling(window=d_period).mean()
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error adding Stochastic Oscillator: {str(e)}")
+        return df
+
+def add_adx(df, period=14):
+    """
+    Add Average Directional Index (ADX) indicator to DataFrame.
+    
+    Args:
+        df (pd.DataFrame): DataFrame with price data
+        period (int, optional): Period for ADX calculation. Default is 14.
+        
+    Returns:
+        pd.DataFrame: DataFrame with added indicator
+    """
+    try:
+        # Create a copy to avoid SettingWithCopyWarning
+        result = df.copy()
+        
+        # Calculate True Range
+        result['tr1'] = abs(result['high'] - result['low'])
+        result['tr2'] = abs(result['high'] - result['close'].shift(1))
+        result['tr3'] = abs(result['low'] - result['close'].shift(1))
+        result['tr'] = result[['tr1', 'tr2', 'tr3']].max(axis=1)
+        
+        # Calculate Directional Movement (+DM and -DM)
+        result['up_move'] = result['high'] - result['high'].shift(1)
+        result['down_move'] = result['low'].shift(1) - result['low']
+        
+        result['plus_dm'] = 0
+        result.loc[(result['up_move'] > result['down_move']) & (result['up_move'] > 0), 'plus_dm'] = result['up_move']
+        
+        result['minus_dm'] = 0
+        result.loc[(result['down_move'] > result['up_move']) & (result['down_move'] > 0), 'minus_dm'] = result['down_move']
+        
+        # Calculate smoothed averages
+        result['atr_adx'] = result['tr'].rolling(window=period).mean()
+        result['plus_di'] = 100 * (result['plus_dm'].rolling(window=period).mean() / result['atr_adx'])
+        result['minus_di'] = 100 * (result['minus_dm'].rolling(window=period).mean() / result['atr_adx'])
+        
+        # Calculate ADX
+        result['dx'] = 100 * (abs(result['plus_di'] - result['minus_di']) / (result['plus_di'] + result['minus_di']))
+        result['adx'] = result['dx'].rolling(window=period).mean()
+        
+        # Drop intermediate columns
+        drop_cols = ['tr1', 'tr2', 'tr3', 'up_move', 'down_move', 'plus_dm', 'minus_dm', 'dx']
+        result = result.drop([col for col in drop_cols if col in result.columns], axis=1)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error adding ADX: {str(e)}")
+        return df
+
 def add_all_indicators(df, sma_period=20, ema_period=20, rsi_period=14, 
                        macd_fast=12, macd_slow=26, macd_signal=9,
                        bb_period=20, bb_std=2.0, atr_period=14,
-                       stoch_rsi_period=14, stoch_rsi_smooth_k=3, stoch_rsi_smooth_d=3):
+                       stoch_rsi_period=14, stoch_rsi_smooth_k=3, stoch_rsi_smooth_d=3,
+                       adx_period=14, stoch_period=14):
     """
     Add all technical indicators to DataFrame.
     
@@ -241,11 +320,24 @@ def add_all_indicators(df, sma_period=20, ema_period=20, rsi_period=14,
         result = add_atr(result, atr_period)
         result = add_stoch_rsi(result, stoch_rsi_period, stoch_rsi_smooth_k, stoch_rsi_smooth_d)
         
+        # Add new indicators for consensus strategy
+        result = add_stochastic(result, stoch_period)
+        result = add_adx(result, adx_period)
+        
+        # Add SMA with different periods for crossover analysis
+        # Add short term SMA for crossover signal
+        if f'sma_{sma_period}' in result.columns and 'close' in result.columns:
+            result['sma_50'] = result['close'].rolling(window=50).mean()
+            result['sma_9'] = result['close'].rolling(window=9).mean()
+        
         # Add volatility
         result['volatility'] = result['close'].pct_change().rolling(window=20).std() * (252 ** 0.5)  # Annualized
         
         # Generate trading signals based on indicators
         result = add_trading_signals(result, sma_period, rsi_period)
+        
+        # Clean up any NaN values that might have been introduced
+        # result.fillna(method='bfill', inplace=True)
         
         return result
         
