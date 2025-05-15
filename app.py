@@ -30,16 +30,10 @@ except ImportError:
     TELEGRAM_AVAILABLE = False
     logging.warning("Telegram notification module could not be imported")
 
-# Try to import deep learning modules dynamically
+# Set LSTM availability to false by default
 LSTM_AVAILABLE = False
-try:
-    # Check if TensorFlow is available
-    import tensorflow as tf
-    from models.deep_learning import train_evaluate_lstm, create_lstm_model, save_model, load_model
-    LSTM_AVAILABLE = True
-    logging.info("TensorFlow and LSTM modules loaded successfully")
-except ImportError:
-    logging.warning("TensorFlow or LSTM modules could not be imported")
+# Do not attempt to import TensorFlow at module level due to compatibility issues
+logging.warning("TensorFlow/LSTM modules disabled due to compatibility issues")
     
 # Import configuration
 from config import ENABLE_TELEGRAM
