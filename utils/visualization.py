@@ -322,22 +322,57 @@ def plot_feature_importance(feature_importances, feature_names):
     Create a horizontal bar chart of feature importances.
     
     Args:
-        feature_importances (list or np.array): Array of feature importance values
+        feature_importances (dict or list or np.array): Feature importance values
+            If dict, keys are model names and values are arrays of feature importances
+            If list/array, it contains feature importance values directly
         feature_names (list): List of feature names
         
     Returns:
         plotly.graph_objects.Figure: Interactive Plotly figure
     """
     try:
-        # Convert to numpy arrays if not already
-        if not isinstance(feature_importances, np.ndarray):
-            feature_importances = np.array(feature_importances)
+        # Handle the case where feature_importances is a dictionary
+        if isinstance(feature_importances, dict):
+            # If it's a dictionary, use the first model's feature importances
+            if not feature_importances:
+                # Empty dictionary
+                logger.warning("Empty feature_importances dictionary")
+                raise ValueError("No feature importance data available")
+                
+            # Get the first model's feature importances
+            model_name = list(feature_importances.keys())[0]
+            importance_array = feature_importances[model_name]
+            
+            # Convert to numpy array if not already
+            if not isinstance(importance_array, np.ndarray):
+                importance_array = np.array(importance_array)
+        else:
+            # If feature_importances is already an array or list
+            if not isinstance(feature_importances, np.ndarray):
+                importance_array = np.array(feature_importances)
+            else:
+                importance_array = feature_importances
         
+        # Convert feature names to numpy array if not already
         if not isinstance(feature_names, np.ndarray):
-            feature_names = np.array(feature_names)
+            feature_names_array = np.array(feature_names)
+        else:
+            feature_names_array = feature_names
+            
+        # Check if we have valid data
+        if len(importance_array) == 0 or len(feature_names_array) == 0:
+            raise ValueError("Empty feature importances or feature names")
+            
+        # Check if lengths match
+        if len(importance_array) != len(feature_names_array):
+            logger.warning(f"Feature importance length ({len(importance_array)}) does not match feature names length ({len(feature_names_array)})")
+            # Use shorter length
+            min_len = min(len(importance_array), len(feature_names_array))
+            importance_array = importance_array[:min_len]
+            feature_names_array = feature_names_array[:min_len]
         
         # Sort by importance
-        sorted_idx = feature_importances.argsort()
+        sorted_idx = importance_array.argsort()
         
         # Limit to top 20 features for readability
         if len(sorted_idx) > 20:
@@ -346,11 +381,11 @@ def plot_feature_importance(feature_importances, feature_names):
         # Create bar chart
         fig = go.Figure(
             go.Bar(
-                y=feature_names[sorted_idx],
-                x=feature_importances[sorted_idx],
+                y=feature_names_array[sorted_idx],
+                x=importance_array[sorted_idx],
                 orientation='h',
                 marker=dict(
-                    color=feature_importances[sorted_idx],
+                    color=importance_array[sorted_idx],
                     colorscale='Viridis'
                 )
             )
