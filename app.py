@@ -42,6 +42,17 @@ Features include technical indicator visualization, machine learning predictions
 """)
 
 # Sidebar for inputs
+st.sidebar.header("Data Source Configuration")
+
+# Data source preference
+data_source_options = ["both", "yfinance", "twelvedata"]
+data_source = st.sidebar.radio(
+    "Data Source Preference",
+    data_source_options,
+    index=0,
+    help="Choose which data source to use for forex data. 'both' will try TwelveData first, then fall back to YFinance if needed."
+)
+
 st.sidebar.header("Data Parameters")
 
 # Select forex pair
@@ -70,6 +81,17 @@ if use_date_range:
 # Interval selection
 interval_options = ["1m", "2m", "5m", "15m", "30m", "60m", "90m", "1h", "1d", "5d", "1wk", "1mo", "3mo"]
 selected_interval = st.sidebar.selectbox("Select Interval", interval_options, index=8)
+
+# Display info about the data sources
+st.sidebar.info("""
+**Data Sources**:
+- **TwelveData**: Professional API with high-quality forex data
+- **YFinance**: Yahoo Finance data API
+""")
+
+# Update the data source preference in the data loader module
+import utils.data_loader as data_loader
+data_loader.DATA_SOURCE_PREFERENCE = data_source
 
 # Technical indicator parameters
 st.sidebar.header("Technical Indicators Parameters")

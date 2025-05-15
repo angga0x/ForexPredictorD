@@ -95,26 +95,33 @@ def get_forex_data_twelvedata(symbol, interval="1day", outputsize=30, start_date
         # Rename columns for consistency with the rest of the application
         data.columns = [col.lower() for col in data.columns]
         
-        # Handle specific column renames if needed
-        column_mapping = {
-            'close': 'close',
-            'high': 'high',
-            'low': 'low',
-            'open': 'open',
-            'volume': 'volume'
-        }
+        # Create a new DataFrame with renamed columns to avoid the rename issue
+        renamed_data = pd.DataFrame()
         
-        data = data.rename(columns={k: v for k, v in column_mapping.items() if k in data.columns})
+        # Map columns to standard format
+        if 'close' in data.columns:
+            renamed_data['close'] = data['close']
+        if 'high' in data.columns:
+            renamed_data['high'] = data['high']
+        if 'low' in data.columns:
+            renamed_data['low'] = data['low']
+        if 'open' in data.columns:
+            renamed_data['open'] = data['open']
+        if 'volume' in data.columns:
+            renamed_data['volume'] = data['volume']
+            
+        # Use the original index
+        renamed_data.index = data.index
         
         # Add volume column if missing (some forex data doesn't include volume)
-        if 'volume' not in data.columns:
-            data['volume'] = 0
+        if 'volume' not in renamed_data.columns:
+            renamed_data['volume'] = 0
             
         # Sort the data by date (ascending)
-        data = data.sort_index()
+        renamed_data = renamed_data.sort_index()
         
-        logger.info(f"Successfully fetched {len(data)} rows of data for {symbol} from TwelveData")
-        return data
+        logger.info(f"Successfully fetched {len(renamed_data)} rows of data for {symbol} from TwelveData")
+        return renamed_data
         
     except Exception as e:
         logger.error(f"Error fetching data from TwelveData: {str(e)}")
@@ -176,16 +183,16 @@ def map_yfinance_to_twelvedata_symbol(yf_symbol):
     # For other formats, return the original symbol
     return yf_symbol
 
-def get_technical_indicators_twelvedata(symbol, indicator, interval="1day", outputsize=30, params=None):
+def get_individual_indicator_twelvedata(symbol, indicator_name, interval="1day", outputsize=30, **params):
     """
-    Get technical indicator data from TwelveData API.
+    Get a single technical indicator from TwelveData API.
     
     Args:
         symbol (str): Forex pair symbol
-        indicator (str): Technical indicator name
+        indicator_name (str): Name of the indicator (e.g., "sma", "rsi")
         interval (str, optional): Time interval. Default is "1day".
         outputsize (int, optional): Number of data points to retrieve. Default is 30.
-        params (dict, optional): Additional parameters for the indicator. Default is None.
+        **params: Additional parameters for the indicator
         
     Returns:
         pd.DataFrame: DataFrame with indicator data
@@ -194,25 +201,38 @@ def get_technical_indicators_twelvedata(symbol, indicator, interval="1day", outp
         td_client = initialize_client()
         if td_client is None:
             return None
-            
-        # Set default parameters if None provided
-        if params is None:
-            params = {}
-            
-        # Get indicator data
-        indicator_data = td_client.get_indicator(
+        
+        # Create a time series object
+        ts = td_client.time_series(
             symbol=symbol,
             interval=interval,
-            indicator=indicator,
-            outputsize=outputsize,
-            **params
+            outputsize=outputsize
         )
         
-        # Convert to pandas DataFrame
-        data = indicator_data.as_pandas()
+        # Use the correct method for the indicator
+        if indicator_name.lower() == "sma":
+            indicator_ts = ts.with_sma(**params)
+        elif indicator_name.lower() == "ema":
+            indicator_ts = ts.with_ema(**params)
+        elif indicator_name.lower() == "rsi":
+            indicator_ts = ts.with_rsi(**params)
+        elif indicator_name.lower() == "macd":
+            indicator_ts = ts.with_macd(**params)
+        elif indicator_name.lower() == "bbands" or indicator_name.lower() == "bollinger_bands":
+            indicator_ts = ts.with_bbands(**params)
+        elif indicator_name.lower() == "atr":
+            indicator_ts = ts.with_atr(**params)
+        elif indicator_name.lower() == "stoch":
+            indicator_ts = ts.with_stoch(**params)
+        else:
+            logger.warning(f"Indicator {indicator_name} not implemented for TwelveData API")
+            return None
+        
+        # Get the data as pandas DataFrame
+        data = indicator_ts.as_pandas()
         
         if data is None or data.empty:
-            logger.warning(f"No {indicator} data returned from TwelveData for {symbol}")
+            logger.warning(f"No {indicator_name} data returned from TwelveData for {symbol}")
             return None
             
         # Ensure datetime index
@@ -221,26 +241,26 @@ def get_technical_indicators_twelvedata(symbol, indicator, interval="1day", outp
         # Rename columns to lowercase
         data.columns = [col.lower() for col in data.columns]
         
-        logger.info(f"Successfully fetched {indicator} data for {symbol} from TwelveData")
+        logger.info(f"Successfully fetched {indicator_name} data for {symbol} from TwelveData")
         return data
         
     except Exception as e:
-        logger.error(f"Error fetching {indicator} data from TwelveData: {str(e)}")
+        logger.error(f"Error fetching {indicator_name} data from TwelveData: {str(e)}")
         return None
 
-def get_multiple_indicators_twelvedata(symbol, indicators, interval="1day", outputsize=30):
+def get_price_with_indicators(symbol, indicators=None, interval="1day", outputsize=30):
     """
-    Get multiple technical indicators from TwelveData API.
+    Get price data with indicators from TwelveData API.
     
     Args:
         symbol (str): Forex pair symbol
-        indicators (list): List of dictionaries with indicator configurations
-                          Each dict should have 'name' and optionally 'params' keys
+        indicators (list, optional): List of dictionaries with indicator configurations.
+                                    Each dict should have 'name' and optionally 'params' keys.
         interval (str, optional): Time interval. Default is "1day".
         outputsize (int, optional): Number of data points to retrieve. Default is 30.
         
     Returns:
-        pd.DataFrame: DataFrame with all indicators
+        pd.DataFrame: DataFrame with price data and indicators
     """
     try:
         td_client = initialize_client()
@@ -254,56 +274,44 @@ def get_multiple_indicators_twelvedata(symbol, indicators, interval="1day", outp
             outputsize=outputsize
         )
         
-        # Initialize batch request with price data
-        batch = td_client.batch()
-        batch.add(ts)
+        # Create time series with indicators
+        if indicators:
+            for ind in indicators:
+                name = ind['name']
+                params = ind.get('params', {})
+                
+                # Add indicator to time series
+                if name.lower() == "sma":
+                    ts = ts.with_sma(**params)
+                elif name.lower() == "ema":
+                    ts = ts.with_ema(**params)
+                elif name.lower() == "rsi":
+                    ts = ts.with_rsi(**params)
+                elif name.lower() == "macd":
+                    ts = ts.with_macd(**params)
+                elif name.lower() == "bbands" or name.lower() == "bollinger_bands":
+                    ts = ts.with_bbands(**params)
+                elif name.lower() == "atr":
+                    ts = ts.with_atr(**params)
+                elif name.lower() == "stoch":
+                    ts = ts.with_stoch(**params)
         
-        # Add all indicators to the batch
-        for ind in indicators:
-            name = ind['name']
-            params = ind.get('params', {})
-            
-            indicator = td_client.get_indicator(
-                symbol=symbol,
-                interval=interval,
-                indicator=name,
-                outputsize=outputsize,
-                **params
-            )
-            batch.add(indicator)
-            
-        # Execute batch request
-        data = batch.execute()
+        # Get the data as pandas DataFrame
+        data = ts.as_pandas()
         
-        # Process results
-        if not data or len(data) < 2:
-            logger.warning(f"Failed to get indicator data for {symbol}")
+        if data is None or data.empty:
+            logger.warning(f"No data returned from TwelveData for {symbol}")
             return None
             
-        # Convert to pandas DataFrames
-        price_data = data[0].as_pandas()
+        # Ensure datetime index
+        data.index = pd.to_datetime(data.index)
         
-        # Merge all indicator DataFrames
-        for i, ind in enumerate(indicators):
-            indicator_df = data[i+1].as_pandas()
-            
-            # Skip if empty
-            if indicator_df is None or indicator_df.empty:
-                continue
-                
-            # Rename columns to avoid duplicates and add indicator prefix
-            indicator_df.columns = [f"{ind['name'].lower()}_{col.lower()}" 
-                                   for col in indicator_df.columns]
-            
-            # Merge with price data
-            price_data = price_data.join(indicator_df)
-            
-        # Ensure lowercase column names for consistency
-        price_data.columns = [col.lower() for col in price_data.columns]
+        # Lowercase column names
+        data.columns = [col.lower() for col in data.columns]
         
-        logger.info(f"Successfully fetched multiple indicators for {symbol} from TwelveData")
-        return price_data
+        logger.info(f"Successfully fetched price data with indicators for {symbol} from TwelveData")
+        return data
         
     except Exception as e:
-        logger.error(f"Error fetching multiple indicators from TwelveData: {str(e)}")
+        logger.error(f"Error fetching data with indicators from TwelveData: {str(e)}")
         return None
