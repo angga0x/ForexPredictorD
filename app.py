@@ -176,11 +176,9 @@ try:
     # Fetch and display news sentiment analysis
     st.header("Market News Sentiment Analysis")
     
-    # Add news lookup period selection in sidebar if not already present
-    if 'news_days' not in locals() and 'news_days' not in globals():
-        news_days = 7
-        st.sidebar.header("News Analysis")
-        news_days = st.sidebar.slider("News Lookup Period (Days)", 1, 30, 7)
+    # Add news lookup period selection in sidebar
+    st.sidebar.header("News Analysis")
+    news_days = st.sidebar.slider("News Lookup Period (Days)", 1, 30, 7)
     
     with st.spinner("Fetching and analyzing forex news..."):
         # Get news sentiment for the selected pair

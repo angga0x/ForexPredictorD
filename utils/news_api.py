@@ -12,6 +12,7 @@ from config import NEWS_API_KEY
 
 # Configure logger
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 # Initialize NewsAPI client
 newsapi = NewsApiClient(api_key=NEWS_API_KEY)
