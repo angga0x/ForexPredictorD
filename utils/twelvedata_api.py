@@ -50,7 +50,7 @@ def get_available_forex_pairs():
         logger.error(f"Error getting available forex pairs for TwelveData: {str(e)}")
         return []
 
-def get_forex_data_twelvedata(symbol, interval="1day", outputsize=30, start_date=None, end_date=None):
+def get_forex_data_twelvedata(symbol, interval="1day", outputsize=100, start_date=None, end_date=None):
     """
     Get forex data from TwelveData API.
     
