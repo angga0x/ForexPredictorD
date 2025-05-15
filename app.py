@@ -165,6 +165,12 @@ try:
         st.dataframe(data.head())
         st.write(f"Data Shape: {data.shape}")
         st.write(f"Date Range: {data.index.min()} to {data.index.max()}")
+        
+        # Display data source information
+        if 'data_source' in data.attrs:
+            st.success(f"Data retrieved from: **{data.attrs['data_source']}**")
+        else:
+            st.info("Data source information not available")
 
     # Calculate technical indicators
     with st.spinner("Calculating technical indicators..."):

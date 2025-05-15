@@ -117,7 +117,14 @@ def get_forex_data(symbol, start_date=None, end_date=None, interval="1d", period
             
             if data is not None and not data.empty:
                 # Add a column for the date in a more accessible format
-                data['date'] = [idx.strftime('%Y-%m-%d') for idx in data.index]
+                try:
+                    data['date'] = [pd.Timestamp(idx).strftime('%Y-%m-%d') for idx in data.index]
+                except Exception as e:
+                    logger.warning(f"Could not create date column: {str(e)}")
+                    data['date'] = data.index.astype(str)
+                
+                # Add data source attribute
+                data.attrs['data_source'] = 'TwelveData'
                 logger.info(f"Successfully fetched {len(data)} rows of data for {symbol} from TwelveData")
                 return data
             
@@ -200,6 +207,8 @@ def get_forex_data(symbol, start_date=None, end_date=None, interval="1d", period
             logger.warning(f"Could not create date column: {str(e)}")
             data['date'] = data.index.astype(str)
         
+        # Add data source attribute
+        data.attrs['data_source'] = 'YFinance'
         logger.info(f"Successfully fetched {len(data)} rows of data for {symbol} from YFinance")
         return data
         
