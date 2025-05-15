@@ -205,6 +205,9 @@ try:
         # Model training and evaluation
         st.header("Prediction Models")
         
+        # Initialize variables to avoid "possibly unbound" errors
+        ml_prediction_data = None
+        
         # Prepare data for training
         with st.spinner("Preparing data for modeling..."):
             X_train, X_test, y_train, y_test, features = prepare_data_for_training(

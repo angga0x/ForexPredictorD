@@ -79,32 +79,32 @@ def get_forex_data(symbol, start_date=None, end_date=None, interval="1d", period
             td_interval = map_yfinance_to_twelvedata_interval(interval)
             
             # Calculate outputsize (number of data points) based on period if provided
-            outputsize = 30  # Default
+            outputsize = 200  # Increased default for better ML performance
             if period:
                 if period == "1d":
-                    outputsize = 1
+                    outputsize = 50  # Increased from 1
                 elif period == "5d":
-                    outputsize = 5
+                    outputsize = 100  # Increased from 5
                 elif period == "1mo":
-                    outputsize = 30
+                    outputsize = 200  # Increased from 30
                 elif period == "3mo":
-                    outputsize = 90
+                    outputsize = 300  # Increased from 90
                 elif period == "6mo":
-                    outputsize = 180
+                    outputsize = 500  # Increased from 180
                 elif period == "1y":
-                    outputsize = 365
+                    outputsize = 700  # Increased from 365
                 elif period == "2y":
-                    outputsize = 730
+                    outputsize = 1000  # Increased from 730
                 elif period == "5y":
-                    outputsize = 1825
+                    outputsize = 2000  # Increased from 1825
                 elif period == "10y":
-                    outputsize = 3650
+                    outputsize = 4000  # Increased from 3650
                 elif period == "ytd":
                     # Calculate days from start of year to today
                     today = datetime.now()
                     start_of_year = datetime(today.year, 1, 1)
                     days = (today - start_of_year).days
-                    outputsize = max(days, 1)
+                    outputsize = max(days * 2, 100)  # Increased
             
             # Fetch data from TwelveData
             data = get_forex_data_twelvedata(

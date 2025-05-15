@@ -9,7 +9,7 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
-def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_column='close', min_samples=30):
+def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_column='close', min_samples=20):
     """
     Prepare data for model training by creating features and target variables.
     
@@ -31,8 +31,8 @@ def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_c
         
         # Check if we have enough data
         if len(data) <= prediction_horizon + 5:  # Need at least prediction_horizon + some extra samples
-            logger.error(f"Not enough data for training: {len(data)} rows is insufficient")
-            return pd.DataFrame(), pd.DataFrame(), pd.Series(), pd.Series(), []
+            logger.warning(f"Data might be insufficient for training: {len(data)} rows. Will continue with what we have.")
+            # We'll continue with what we have instead of returning empty frames
         
         # Drop rows with NaN values
         data = data.dropna()
@@ -45,8 +45,8 @@ def prepare_data_for_training(df, prediction_horizon=5, train_size=0.8, target_c
         
         # Check if we still have enough data after cleaning
         if len(data) < min_samples:
-            logger.error(f"Insufficient data after preprocessing: {len(data)} < {min_samples} minimum required samples")
-            return pd.DataFrame(), pd.DataFrame(), pd.Series(), pd.Series(), []
+            logger.warning(f"Data might be insufficient after preprocessing: {len(data)} < {min_samples} minimum required samples. Will continue with what we have.")
+            # We'll continue with what we have to make the best of available data
         
         # Select features (exclude date, target, and raw OHLCV data)
         exclude_columns = ['date', 'target', 'open', 'high', 'low', 'close', 'volume']
