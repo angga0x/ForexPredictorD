@@ -57,9 +57,21 @@ def get_forex_data(symbol, start_date=None, end_date=None, interval="1d", period
                 period = "1mo"  # Default to 1 month if neither dates nor period provided
             data = yf.download(symbol, period=period, interval=interval, progress=False)
         
-        if data.empty:
+        # Check if data was successfully retrieved
+        if data is None:
             logger.warning(f"No data returned for {symbol}")
             return None
+            
+        # Check if data is empty
+        if len(data) == 0:
+            logger.warning(f"Empty data returned for {symbol}")
+            return None
+        
+        # Handle MultiIndex columns in the dataframe (yfinance returns multi-level columns for forex data)
+        if isinstance(data.columns, pd.MultiIndex):
+            logger.info(f"Detected MultiIndex columns: {data.columns}")
+            # Convert multi-level columns to single level with just the first level
+            data.columns = [col[0] for col in data.columns]
         
         # Check if data has the required columns
         required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']

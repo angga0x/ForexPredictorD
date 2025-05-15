@@ -247,13 +247,21 @@ try:
         # Backtesting
         st.header("Strategy Backtesting")
         with st.spinner("Running backtesting..."):
+            # Initialize prediction data
+            prediction_data = None
+            
+            # Only use ML predictions if models were trained
+            if use_random_forest or use_xgboost or use_gradient_boosting:
+                if 'model_results' in locals() and model_results is not None and hasattr(model_results, 'get'):
+                    prediction_data = {
+                        'predictions': model_results.get('best_predictions', None)
+                    }
+            
             backtest_results = run_backtest(
                 data_with_indicators, 
                 strategy_type=strategy_type,
                 initial_capital=initial_capital,
-                prediction_data=None if not (use_random_forest or use_xgboost or use_gradient_boosting or use_lstm) else {
-                    'predictions': model_results['best_predictions'] if 'best_predictions' in model_results else None
-                }
+                prediction_data=prediction_data
             )
             
             # Display backtest results
