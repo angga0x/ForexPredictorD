@@ -202,7 +202,7 @@ try:
                 if use_gradient_boosting:
                     models_to_train.append("gradient_boosting")
                 
-                model_results, best_model, feature_importances = train_evaluate_ml_models(
+                model_results, best_model, feature_importances, ml_prediction_data = train_evaluate_ml_models(
                     X_train, y_train, X_test, y_test, models=models_to_train
                 )
                 
@@ -247,21 +247,19 @@ try:
         # Backtesting
         st.header("Strategy Backtesting")
         with st.spinner("Running backtesting..."):
-            # Initialize prediction data
-            prediction_data = None
+            # Initialize prediction data for backtesting
+            backtesting_prediction_data = None
             
             # Only use ML predictions if models were trained
             if use_random_forest or use_xgboost or use_gradient_boosting:
-                if 'model_results' in locals() and model_results is not None and hasattr(model_results, 'get'):
-                    prediction_data = {
-                        'predictions': model_results.get('best_predictions', None)
-                    }
+                if 'ml_prediction_data' in locals() and ml_prediction_data is not None:
+                    backtesting_prediction_data = ml_prediction_data
             
             backtest_results = run_backtest(
                 data_with_indicators, 
                 strategy_type=strategy_type,
                 initial_capital=initial_capital,
-                prediction_data=prediction_data
+                prediction_data=backtesting_prediction_data
             )
             
             # Display backtest results

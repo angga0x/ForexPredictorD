@@ -321,11 +321,20 @@ def train_evaluate_ml_models(X_train, y_train, X_test, y_test, models=None):
         # Create results dataframe
         results_df = pd.DataFrame(results)
         
-        # Add best predictions to results for backtesting
-        results_df['best_predictions'] = best_predictions if 'best_predictions' in locals() else None
+        # Return best predictions separately instead of adding to dataframe
+        # (to avoid shape mismatch errors)
+        best_pred = best_predictions if 'best_predictions' in locals() else None
         
-        return results_df, best_model, feature_importances
+        # Create a dictionary with best prediction data
+        prediction_data = {'best_predictions': best_pred}
+        
+        return results_df, best_model, feature_importances, prediction_data
         
     except Exception as e:
         logger.error(f"Error training and evaluating models: {str(e)}")
-        raise
+        # Return empty results in case of error
+        results_df = pd.DataFrame(columns=['model', 'accuracy', 'precision', 'recall', 'f1_score', 'cv_mean', 'cv_std'])
+        best_model = None
+        feature_importances = {}
+        prediction_data = {'best_predictions': None}
+        return results_df, best_model, feature_importances, prediction_data
